@@ -13,7 +13,11 @@ playerA: dw 0
 playerB: dw 0
 playerA_Score: db 0
 playerB_Score: db 0
+msgRowLoc: dw 13
+msgColLoc: dw 30
 oldIsr: dd 0
+msg1: db "player A WIN", 0
+msg2: db "player B WIN", 0
 
 clrscr:
     push es
@@ -35,7 +39,7 @@ clrscr:
     ret
 
 clrPrev:
-	pusha
+    pusha
     mov ax, [oldRow]
     mov bx, 80
     mul bx
@@ -46,16 +50,16 @@ clrPrev:
     mov es, ax
     mov ax, 0x0720
     stosw
-	
+    
     popa
     ret
 
 printScore:
-	pusha
-	mov ax, 0xb800
-	mov es, ax
-	
-	mov ah, 0x02
+    pusha
+    mov ax, 0xb800
+    mov es, ax
+    
+    mov ah, 0x02
     mov byte al, [playerA_Score]
     add al, 0x30
     mov di, 316
@@ -65,9 +69,9 @@ printScore:
     add al, 0x30
     mov di, 3836
     mov [es:di], ax
-	
-	popa
-	ret
+    
+    popa
+    ret
 
 printBall:
     call clrPrev
@@ -86,11 +90,11 @@ printBall:
     ret
 
 printBar:
-	pusha
-	mov ax, 0xb800
-	mov es, ax
-	
-	mov ax, 0x7020
+    pusha
+    mov ax, 0xb800
+    mov es, ax
+    
+    mov ax, 0x7020
     mov cx, 20
     mov di, 3840
     rep stosw
@@ -98,34 +102,63 @@ printBar:
     mov di, 0
     mov cx, 20
     rep stosw
-	
-	popa
-	ret
+    
+    popa
+    ret
 
+printMsg:
+    push bp
+    mov bp, sp
+    pusha
+    
+    mov ax, 0xb800
+    mov es, ax
+
+    mov si, [bp + 4]
+    xor ax, ax
+    mov ax, [msgRowLoc]
+    mov bx, 80
+    mul bx
+    add ax, [msgColLoc]
+    shl ax, 1
+	mov di, ax
+    mov ah, 0xF4
+printMessage:
+    lodsb
+    cmp al, 0
+    je terminatePrinting
+    stosw
+    jmp printMessage
+
+terminatePrinting:
+    popa
+    pop bp
+    ret
+    
 timer:
     push ax
     push ds
     push bx
-	
+    
     mov ax, cs
     mov ds, ax
     
     inc word [count]
     cmp word [count], 1 
     jne done
-	call printBar
+    call printBar
     call printBall
     mov word [count], 0
-	
-	mov bx, [row]
-	mov [oldRow], bx
-	mov bx, [col]
-	mov [oldCol], bx
-	
+    
+    mov bx, [row]
+    mov [oldRow], bx
+    mov bx, [col]
+    mov [oldCol], bx
+    
     cmp byte [playerA_Score], 5
-    je terminate
+    je playerAWin
     cmp byte [playerB_Score], 5
-    je terminate
+    je playerBWin
 
 checkLowerPaddle:
     mov ax, [row]
@@ -201,23 +234,33 @@ incRow:
     add byte [playerA_Score], 1
 
 done:
-	call printScore
+    call printScore
     mov al, 0x20            
     out 0x20, al
     
-	pop bx
+    pop bx
     pop ds
     pop ax
     iret
+
+playerAWin:
+    push word msg1
+    call printMsg
+    jmp terminate
+
+playerBWin:
+    push word msg2
+    call printMsg
+    jmp terminate
 
 start:
     mov byte [playerA_Score], 0
     mov byte [playerB_Score], 0
     call clrscr
-	mov ax, [row]
-	mov [oldRow], ax
-	mov ax, [col]
-	mov [oldCol], ax
+    mov ax, [row]
+    mov [oldRow], ax
+    mov ax, [col]
+    mov [oldCol], ax
     xor ax, ax
     mov es, ax
     mov ax, [es:8*4]
