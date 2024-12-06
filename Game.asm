@@ -3,14 +3,17 @@
 
 row:   dw 0
 col:   dw 40
+oldRow: dw 0
+oldCol: dw 0
 count: dw 0
 flag:   dw 0
 colState: dw 0
 rowState: dw 0
 playerA: dw 0
 playerB: dw 0
-playerA_Scroe: db 0
-playerB_Scroe: db 0
+playerA_Score: db 0
+playerB_Score: db 0
+oldIsr: dd 0
 
 clrscr:
     push es
@@ -25,34 +28,49 @@ clrscr:
     mov cx, 4000
     rep stosw
     
-    mov ax, 0x7020
-    mov cx, 20
-    mov di, 3840
-    rep stosw
-	
-    mov di, 0
-    mov cx, 20
-    rep stosw
-	
-	mov ah, 0x02
-	mov byte al, [playerA_Scroe]
-	add al, 0x30
-	mov di, 316
-	mov [es:di], ax
-	
-	mov byte al, [playerB_Scroe]
-	add al, 0x30
-	mov di, 3836
-	mov [es:di], ax
-	
     pop cx
     pop di
     pop ax
     pop es
     ret
 
+clrPrev:
+	pusha
+    mov ax, [oldRow]
+    mov bx, 80
+    mul bx
+    add ax, [oldCol]
+    shl ax, 1
+    mov di, ax
+    mov ax, 0xb800
+    mov es, ax
+    mov ax, 0x0720
+    stosw
+	
+    popa
+    ret
+
+printScore:
+	pusha
+	mov ax, 0xb800
+	mov es, ax
+	
+	mov ah, 0x02
+    mov byte al, [playerA_Score]
+    add al, 0x30
+    mov di, 316
+    mov [es:di], ax
+    
+    mov byte al, [playerB_Score]
+    add al, 0x30
+    mov di, 3836
+    mov [es:di], ax
+	
+	popa
+	ret
+
 printBall:
-    call clrscr
+    call clrPrev
     pusha
     mov ax, [row]
     mov bx, 80
@@ -67,19 +85,47 @@ printBall:
     popa
     ret
 
+printBar:
+	pusha
+	mov ax, 0xb800
+	mov es, ax
+	
+	mov ax, 0x7020
+    mov cx, 20
+    mov di, 3840
+    rep stosw
+    
+    mov di, 0
+    mov cx, 20
+    rep stosw
+	
+	popa
+	ret
 
 timer:
     push ax
     push ds
-    
+    push bx
+	
     mov ax, cs
     mov ds, ax
     
     inc word [count]
     cmp word [count], 1 
     jne done
+	call printBar
     call printBall
     mov word [count], 0
+	
+	mov bx, [row]
+	mov [oldRow], bx
+	mov bx, [col]
+	mov [oldCol], bx
+	
+    cmp byte [playerA_Score], 5
+    je terminate
+    cmp byte [playerB_Score], 5
+    je terminate
 
 checkLowerPaddle:
     mov ax, [row]
@@ -122,7 +168,7 @@ setRowZero:
     mov word [rowState], 0
 
 continue:
-    cmp word [colState],0
+    cmp word [colState], 0
     je incCol
     dec word [col]
     cmp word [col], 0
@@ -143,7 +189,7 @@ checkRow:
     dec word [row]
     cmp word [row], 0
     jne done
-	add byte [playerB_Scroe], 1
+    add byte [playerB_Score], 1
     mov word [rowState], 0
     jmp done
 
@@ -152,28 +198,47 @@ incRow:
     cmp word [row], 24
     jne done
     mov word [rowState], 1
-	add byte [playerA_Scroe], 1
+    add byte [playerA_Score], 1
 
 done:
+	call printScore
     mov al, 0x20            
     out 0x20, al
     
+	pop bx
     pop ds
     pop ax
     iret
 
 start:
-	mov byte [playerA_Scroe], 0
-	mov byte [playerB_Scroe], 0
+    mov byte [playerA_Score], 0
+    mov byte [playerB_Score], 0
     call clrscr
+	mov ax, [row]
+	mov [oldRow], ax
+	mov ax, [col]
+	mov [oldCol], ax
     xor ax, ax
     mov es, ax
+    mov ax, [es:8*4]
+    mov [oldIsr], ax
+    mov ax, [es:8*4 + 2]
+    mov [oldIsr + 2], ax
+    xor ax, ax
     cli
     mov word [es:8*4], timer
     mov word [es:8*4+2], cs
     sti
-	
+    
     jmp $
+
 terminate:
-	mov ax, 0x4c00
-	int 21h
+    ; Restore the original ISR
+    mov ax, [oldIsr]
+    mov [es:8*4], ax
+    mov ax, [oldIsr + 2]
+    mov [es:8*4 + 2], ax
+    
+    ; Terminate the program
+    mov ax, 0x4c00
+    int 21h
